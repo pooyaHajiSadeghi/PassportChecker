@@ -1,0 +1,16 @@
+# Conservative Python 3.10-3.12 dependency ranges; not a fully locked environment.
+PassportEye==2.2.2
+PyMuPDF>=1.24,<2
+numpy>=1.24,<2
+opencv-python-headless>=4.8,<4.12
+python-dateutil>=2.8.2,<3
+pytesseract>=0.3.10,<0.4
+python-dotenv>=1,<2
+scipy>=1.10,<1.15
+scikit-image>=0.21,<0.25
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+python-multipart>=0.0.18,<1
+
+# Direct OCR reader and printed field image processing
+Pillow>=10,<12

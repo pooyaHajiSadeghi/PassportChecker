@@ -1,89 +1,105 @@
-# Passport Checker
+<div align="center">
 
-A FastAPI passport PDF analyzer with a JavaScript interface, PDF preview, page selection and live streamed check results.
+# PassportChecker
 
-## Folder structure
+**Turn passport PDFs into structured data with live OCR checks.**
+
+A Python + FastAPI application with an interactive browser interface, page selection, streamed analysis progress, and downloadable JSON.
+
+[Getting started](#getting-started) · [API](#api) · [JSON output](#structured-json-output) · [Troubleshooting](#troubleshooting)
+
+Developed by **[Pooya Haji Sadeghi](https://github.com/pooyaHajiSadeghi)**
+
+</div>
+
+## From Passport Pages to Structured Data
+
+Explore the live analysis experience and structured JSON extraction.
+
+| Live Passport Analysis | Structured JSON Extraction |
+| :---: | :---: |
+| ![PassportChecker live analysis and progress interface](docs/images/live-passport-analysis.png) | ![PassportChecker passport information and structured JSON export](docs/images/passport-to-json.png) |
+
+*Promotional illustrations of the application workflow.*
+
+---
+
+## Overview
+
+PassportChecker reads a selected passport page from a PDF, checks its machine-readable zone (MRZ), and extracts holder details. Its browser interface displays the document preview, individual check results, extracted information, and analysis details as processing progresses.
+
+**A passing result reflects the application's document and MRZ rules. It does not establish document authenticity, the holder's identity, or acceptance by an issuing authority.**
+
+## Features
+
+- **PDF preview and page selection** — choose the passport page in a multi-page document.
+- **Live analysis feedback** — receive progress and individual check events through an NDJSON stream.
+- **Multiple OCR paths** — combine PassportEye, direct Tesseract MRZ reads, and printed-field OCR.
+- **Expanded holder extraction** — include father's name and issue date when readable.
+- **Structured JSON export** — download extracted results from the browser.
+- **Review warnings** — surface uncertain name extraction for manual review.
+- **Bounded rendering** — configurable raster limits help control memory use.
+- **Browser and CLI access** — use the interface, HTTP API, or command-line launchers.
+- **Windows and Linux scripts** — create an isolated Python environment and start the service.
+
+## How it works
+
+1. Upload a readable, unencrypted PDF of up to **10 MiB**.
+2. Select the passport page if the PDF contains multiple pages.
+3. The backend renders that page within configured image limits and runs document/MRZ checks.
+4. After validation passes, the extraction stage combines MRZ reads with printed-field OCR.
+5. Review the check results, extracted fields, and warnings, then download JSON if needed.
+
+Extraction normally skips rejected documents. Missing or ambiguous fields may be `null`; extraction quality depends on the scan and page layout.
+
+## Technology
+
+| Layer | Components |
+| --- | --- |
+| HTTP service | Python, FastAPI, Uvicorn |
+| PDF rendering | PyMuPDF |
+| OCR and MRZ | Tesseract OCR, pytesseract, PassportEye |
+| Image processing | OpenCV, Pillow, NumPy, SciPy, scikit-image |
+| Browser interface | HTML, JavaScript, PDF.js |
+| Progress transport | Newline-delimited JSON (NDJSON) |
+
+The OCR pipeline runs on the backend. The browser preview loads PDF.js from a public CDN, so the default frontend is not fully offline.
+
+## Project structure
 
 ```text
 PassportChecker/
-  app/
-    api.py                        # HTTP endpoints and NDJSON stream
-    cli.py                        # Command-line entry point
-    config/settings.py            # Paths, .env loading and Tesseract setup
-    core/mrz_engine.py            # OCR, validation and extraction algorithms
-    services/passport_service.py  # Analysis pipeline and response mapping
-  frontend/
-    index.html                    # Minimal host page
-    passport-checker.js            # UI, styles, PDF preview and API client
-  config/.env.example             # Environment template
-  requirements/base.txt           # Python dependencies
-  scripts/windows/                # Setup, web server and CLI launchers
-  scripts/linux/                  # Equivalent shell launchers
-  docs/
-    file_mapping.md               # Previous-to-new file paths
-    analysis_behavior.md          # Detailed analysis behavior
+├── app/
+│   ├── api.py                       # HTTP endpoints and event streaming
+│   ├── cli.py                       # Command-line entry point
+│   ├── config/settings.py           # Environment and executable paths
+│   ├── core/
+│   │   ├── mrz_engine.py            # MRZ checks and OCR pipeline
+│   │   └── holder_extraction.py     # Holder and printed-field extraction
+│   └── services/passport_service.py # Analysis orchestration and output mapping
+├── frontend/
+│   ├── index.html                   # Browser entry point
+│   └── passport-checker.js          # Interface, preview, and API client
+├── config/.env.example              # Configuration template
+├── requirements/base.txt            # Python dependencies
+├── scripts/
+│   ├── windows/                     # Setup, server, and CLI launchers
+│   └── linux/                       # Equivalent shell launchers
+├── tests/                           # Extraction and integration logic tests
+└── docs/                            # Behavior and migration documentation
 ```
 
-## Windows setup
+## Getting started
 
-Install Python 3.10 with the Python launcher and Tesseract OCR with English language data. Then run:
-
-```bat
-scripts\windows\setup.bat
-scripts\windows\start_server.bat
-```
-
-Setup creates `.venv` in the project root and copies `config/.env.example` to `config/.env` if it does not exist. Set `TESSERACT_CMD` there if Tesseract is not on PATH. Existing environment variables take precedence. Open http://127.0.0.1:8000.
-
-## Linux setup
-
-Install Python 3.10, its venv support, Tesseract OCR and English language data. Run:
+Clone the repository, then follow the installation steps for your operating system below:
 
 ```bash
-bash scripts/linux/setup.sh
-bash scripts/linux/start_server.sh
+git clone https://github.com/pooyaHajiSadeghi/PassportChecker.git
+cd PassportChecker
 ```
 
-Use `PYTHON_BIN=python3.11 bash scripts/linux/setup.sh` to choose a compatible Python version (3.10–3.12). All launchers resolve the project root from their own location.
+Use **64-bit Python 3.10** with the supplied Windows setup script. The dependency ranges target Python **3.10–3.12**; on Linux, select the installed compatible interpreter with `PYTHON_BIN`.
 
-## Analyze a PDF from the command line
-
-```bat
-scripts\windows\analyze_pdf.bat "C:\documents\passport.pdf" --page 1
-```
-
-```bash
-bash scripts/linux/analyze_pdf.sh /absolute/path/passport.pdf --page 1
-```
-
-Relative PDF paths passed to launchers are resolved from the project root. Exit codes: 0 approved, 1 rejected, 2 execution error. `--force-phase2` is a CLI-only testing option that extracts after rejection without changing approval.
-
-## Direct Python commands
-
-Run from the project root using the virtual environment's Python:
-
-```bash
-python -m app.cli --check-env
-python -m app.cli passport.pdf --page 1
-python -m uvicorn app.api:app --host 127.0.0.1 --port 8000
-```
-
-## API and frontend
-
-- `GET /`: serves the minimal HTML host.
-- `/static/passport-checker.js`: serves the frontend JavaScript; the public URL remains unchanged.
-- `POST /api/passport/check`: final JSON response.
-- `POST /api/passport/check/stream`: NDJSON progress, check, heartbeat, result and error events.
-- Multipart fields: `file` and `page_number` (required for multi-page PDFs).
-- Maximum upload: 10 MiB. PDF.js preview uses a public CDN.
-
-The analysis algorithm and validation rules are unchanged. Holder extraction now combines MRZ and printed OCR, including father's name and issue date; see docs/extraction_update.md. The UI and API contracts are unchanged. Restart the server after migration and hard-refresh the browser.
-
-## Migrating an existing installation
-
-Extract into a clean project directory. Copy your existing environment values into `config/.env`, then run setup. Do not copy the old virtual environment; recreate it. Use the new launchers and the `app.api:app` Uvicorn target. See `docs/file_mapping.md` for every renamed file.
-
-## Server installation checklist
 
 Tesseract OCR is a separate operating-system program. Installing `pytesseract` with pip only installs its Python interface. Install Tesseract and the English (`eng`) language data on every server. The current pipeline does not require Persian language data.
 
@@ -243,6 +259,116 @@ Keep one application worker for the current design: the analyzer lock is process
 | Checks arrive only at the end behind a proxy | Disable buffering for the NDJSON endpoint and confirm the frontend uses `/api/passport/check/stream`. |
 | Changes to settings do not apply | Restart Python and check for overriding process environment variables. |
 
-## Extraction update
 
-See `docs/extraction_update.md` for the approved colleague extraction integration, added fields and structured JSON download. Rerun the setup script after updating, then restart the API and hard-refresh the browser.
+## Command-line usage
+
+Run from the project root:
+
+**Windows**
+
+```bat
+scripts\windows\analyze_pdf.bat "C:\documents\passport.pdf" --page 1
+```
+
+**Linux**
+
+```bash
+bash scripts/linux/analyze_pdf.sh /absolute/path/passport.pdf --page 1
+```
+
+Page numbers are **1-based**. Relative PDF paths passed to launchers resolve from the project root. The CLI prints the complete response envelope; its `result` field contains the concise extracted JSON.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Approved by the application checks |
+| `1` | Rejected by the application checks |
+| `2` | Execution or environment error |
+
+`--force-phase2` is a CLI-only testing option for extraction after rejection. It does not change the approval decision.
+
+## API
+
+Start the server, then open [the interface](http://127.0.0.1:8000) or [interactive API documentation](http://127.0.0.1:8000/docs).
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Browser interface |
+| `POST` | `/api/passport/check` | Final JSON response |
+| `POST` | `/api/passport/check/stream` | Streamed progress, checks, and final response |
+
+Both POST endpoints accept `multipart/form-data`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `file` | PDF file | Required; maximum 10 MiB |
+| `page_number` | Integer | 1-based; required for multi-page PDFs |
+
+### Request example
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/passport/check \
+  -F "file=@/absolute/path/passport.pdf" \
+  -F "page_number=1"
+```
+
+For live results, use `curl -N` with `/api/passport/check/stream`. Each line is a separate JSON event with type `progress`, `check`, `heartbeat`, `result`, or `error`. Read the stream through completion and handle error events; an open HTTP stream alone does not mean analysis succeeded.
+
+The regular response includes `approved`, `message`, `analysis`, `passport`, `errors`, `result`, `extraction_performed`, `successful_mrz_reads`, and `page_number`.
+
+## Structured JSON output
+
+The `result` field and browser JSON download use the following shape. All values below are fictional examples:
+
+```json
+{
+  "Passport": "Valid",
+  "First name": "ALEX",
+  "Last name": "EXAMPLE",
+  "Father's name": null,
+  "Passport number": "EXAMPLE01",
+  "Nationality": "UTO",
+  "Date of birth": "1990-01-01",
+  "Sex": "M",
+  "Issue date": "2022-01-01",
+  "Expiry date": "2032-01-01"
+}
+```
+
+Rejected results use `"Passport": "Not Valid"` and include `Reasons`. `Warnings` may be present when manual review is needed. Consumers should handle missing or null extraction values rather than assuming every field is available.
+
+## Data handling and deployment
+
+Uploaded PDFs are processed using temporary storage. The application does not retain extra server-side PDF or JSON output files; JSON export is downloaded through the browser. Account for operating-system temporary storage, application logs, and reverse-proxy logging when deploying.
+
+The supplied API has no authentication layer. Restrict access or add authentication before making it available to other users. Keep real passports, extracted personal data, `config/.env`, and `.venv` out of Git commits.
+
+## Limitations
+
+- OCR can misread text, especially on blurry, rotated, compressed, or low-resolution scans.
+- Printed-field extraction assumes the data page occupies the lower 60% of the selected page; other layouts may yield incomplete results.
+- MRZ check digits validate encoded field consistency. Names have no check digit, and successful MRZ checks do not prove authenticity.
+- Additional OCR passes increase processing time. Lower rendering budgets can reduce memory use and OCR detail.
+- The current analyzer accepts one analysis at a time per process; concurrent requests can receive a busy response.
+- Dependency ranges are not a fully locked environment. Validate installation on the target server.
+
+## Development and validation
+
+With the virtual environment active, run:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Included tests cover extraction decisions and service integration. Full OCR accuracy and browser behavior should also be verified with appropriate non-sensitive test documents on the target machine.
+
+## Further documentation
+
+- [Analysis behavior](docs/analysis_behavior.md)
+- [Extraction details](docs/extraction_update.md)
+- [File migration map](docs/file_mapping.md)
+
+## Author
+
+**Pooya Haji Sadeghi** · [GitHub](https://github.com/pooyaHajiSadeghi)
+
+For bugs or feature requests, [open an issue](https://github.com/pooyaHajiSadeghi/PassportChecker/issues) with reproduction steps and sanitized logs. Use synthetic samples instead of real passport data.
